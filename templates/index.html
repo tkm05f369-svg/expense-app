@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>経費管理アプリ</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
     <style>
         body { font-family: sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; }
         h1, h2 { color: #333; }
@@ -12,6 +13,10 @@
         button:hover { background: #45a049; }
         .receipt-btn { background: #2196F3; }
         .receipt-btn:hover { background: #1976D2; }
+        .report-btn { background: #FF9800; }
+        .report-btn:hover { background: #F57C00; }
+        .delete-btn { background: #f44336; padding: 4px 10px; font-size: 12px; }
+        .delete-btn:hover { background: #d32f2f; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
         th { background: #f2f2f2; }
@@ -20,6 +25,7 @@
         .section { margin-bottom: 20px; padding: 15px; border: 1px solid #eee; border-radius: 8px; }
         .header { display: flex; justify-content: space-between; align-items: center; }
         .logout { color: red; text-decoration: none; }
+        #reportSection { display: none; }
     </style>
 </head>
 <body>
@@ -43,17 +49,25 @@
         <input type="text" id="item" placeholder="経費の名前">
         <input type="number" id="amount" placeholder="金額">
         <button onclick="addExpense()">追加</button>
+        <button class="report-btn" onclick="toggleReport()">📊 月次レポート</button>
+    </div>
+
+    <div class="section" id="reportSection">
+        <h2>📊 月次レポート</h2>
+        <canvas id="reportChart"></canvas>
     </div>
 
     <div id="total"></div>
     <table>
         <thead>
-            <tr><th>日付</th><th>項目</th><th>勘定科目</th><th>金額</th></tr>
+            <tr><th>日付</th><th>項目</th><th>勘定科目</th><th>金額</th><th>操作</th></tr>
         </thead>
         <tbody id="expenseList"></tbody>
     </table>
 
     <script>
+        let chartInstance = null;
+
         async function loadExpenses() {
             const res = await fetch("/expenses");
             const data = await res.json();
@@ -61,10 +75,22 @@
             list.innerHTML = "";
             let total = 0;
             data.forEach(e => {
-                list.innerHTML += `<tr><td>${e.date}</td><td>${e.item}</td><td>${e.category || "未分類"}</td><td>${e.amount.toLocaleString()}円</td></tr>`;
+                list.innerHTML += `<tr>
+                    <td>${e.date}</td>
+                    <td>${e.item}</td>
+                    <td>${e.category || "未分類"}</td>
+                    <td>${e.amount.toLocaleString()}円</td>
+                    <td><button class="delete-btn" onclick="deleteExpense(${e.id})">削除</button></td>
+                </tr>`;
                 total += e.amount;
             });
             document.getElementById("total").textContent = "合計: " + total.toLocaleString() + "円";
+        }
+
+        async function deleteExpense(id) {
+            if (!confirm("削除しますか？")) return;
+            await fetch(`/expenses/${id}`, { method: "DELETE" });
+            loadExpenses();
         }
 
         async function addExpense() {
@@ -95,6 +121,48 @@
             document.getElementById("loading").style.display = "none";
             alert(`登録完了！\n店名: ${data.店名}\n勘定科目: ${data.勘定科目}\n金額: ${data.合計金額}円`);
             loadExpenses();
+        }
+
+        async function toggleReport() {
+            const section = document.getElementById("reportSection");
+            if (section.style.display === "none") {
+                section.style.display = "block";
+                await loadReport();
+            } else {
+                section.style.display = "none";
+            }
+        }
+
+        async function loadReport() {
+            const res = await fetch("/report");
+            const data = await res.json();
+
+            const categories = {};
+            data.forEach(e => {
+                if (!categories[e.category]) categories[e.category] = 0;
+                categories[e.category] += e.total;
+            });
+
+            const labels = Object.keys(categories);
+            const values = Object.values(categories);
+            const colors = ["#FF6384","#36A2EB","#FFCE56","#4BC0C0","#9966FF","#FF9F40","#FF6384","#C9CBCF"];
+
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(document.getElementById("reportChart"), {
+                type: "doughnut",
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: colors
+                    }]
+                },
+                options: {
+                    plugins: {
+                        legend: { position: "bottom" }
+                    }
+                }
+            });
         }
 
         loadExpenses();

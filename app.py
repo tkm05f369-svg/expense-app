@@ -167,6 +167,32 @@ def read_receipt():
     
     return jsonify(result)
 
+@app.route("/expenses/<int:expense_id>", methods=["DELETE"])
+@login_required
+def delete_expense(expense_id):
+    db = get_db()
+    db.execute("DELETE FROM expenses WHERE id = ? AND user_id = ?", (expense_id, current_user.id))
+    db.commit()
+    db.close()
+    return jsonify({"message": "削除しました"})
+
+@app.route("/report")
+@login_required
+def report():
+    db = get_db()
+    expenses = db.execute("""
+        SELECT 
+            strftime('%Y-%m', date) as month,
+            category,
+            SUM(amount) as total
+        FROM expenses 
+        WHERE user_id = ?
+        GROUP BY month, category
+        ORDER BY month DESC
+    """, (current_user.id,)).fetchall()
+    db.close()
+    return jsonify([dict(e) for e in expenses])
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
