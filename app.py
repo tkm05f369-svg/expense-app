@@ -7,7 +7,7 @@ import base64
 from dotenv import load_dotenv
 
 load_dotenv()
-client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY", "dummy"))
 
 app = Flask(__name__)
 filename = "expenses.json"
