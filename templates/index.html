@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>経費管理アプリ</title>
+    <style>
+        body { font-family: sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; }
+        h1, h2 { color: #333; }
+        input { padding: 8px; margin: 5px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:hover { background: #45a049; }
+        .receipt-btn { background: #2196F3; }
+        .receipt-btn:hover { background: #1976D2; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
+        th { background: #f2f2f2; }
+        #total { font-weight: bold; margin-top: 10px; font-size: 18px; }
+        #loading { display: none; color: #666; margin: 10px 0; }
+        .section { margin-bottom: 20px; padding: 15px; border: 1px solid #eee; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <h1>経費管理</h1>
+
+    <div class="section">
+        <h2>📷 レシートから自動登録</h2>
+        <input type="file" id="receiptFile" accept="image/*">
+        <button class="receipt-btn" onclick="uploadReceipt()">読み取って登録</button>
+        <div id="loading">📖 AIがレシートを読み取り中...</div>
+    </div>
+
+    <div class="section">
+        <h2>✏️ 手動で登録</h2>
+        <input type="text" id="item" placeholder="経費の名前">
+        <input type="number" id="amount" placeholder="金額">
+        <button onclick="addExpense()">追加</button>
+    </div>
+
+    <div id="total"></div>
+    <table>
+        <thead>
+            <tr><th>日付</th><th>項目</th><th>勘定科目</th><th>金額</th></tr>
+        </thead>
+        <tbody id="expenseList"></tbody>
+    </table>
+
+    <script>
+        async function loadExpenses() {
+            const res = await fetch("/expenses");
+            const data = await res.json();
+            const list = document.getElementById("expenseList");
+            list.innerHTML = "";
+            let total = 0;
+            data.forEach(e => {
+                list.innerHTML += `<tr><td>${e.date}</td><td>${e.item}</td><td>${e.category || "未分類"}</td><td>${e.amount.toLocaleString()}円</td></tr>`;
+                total += e.amount;
+            });
+            document.getElementById("total").textContent = "合計: " + total.toLocaleString() + "円";
+        }
+
+        async function addExpense() {
+            const item = document.getElementById("item").value;
+            const amount = parseInt(document.getElementById("amount").value);
+            if (!item || !amount) return;
+            await fetch("/expenses", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({item, amount})
+            });
+            document.getElementById("item").value = "";
+            document.getElementById("amount").value = "";
+            loadExpenses();
+        }
+
+        async function uploadReceipt() {
+            const file = document.getElementById("receiptFile").files[0];
+            if (!file) return alert("ファイルを選択してください");
+            
+            document.getElementById("loading").style.display = "block";
+            
+            const formData = new FormData();
+            formData.append("receipt", file);
+            
+            const res = await fetch("/receipt", {
+                method: "POST",
+                body: formData
+            });
+            
+            const data = await res.json();
+            document.getElementById("loading").style.display = "none";
+            alert(`登録完了！\n店名: ${data.店名}\n勘定科目: ${data.勘定科目}\n金額: ${data.合計金額}円`);
+            loadExpenses();
+        }
+
+        loadExpenses();
+    </script>
+</body>
+</html>
