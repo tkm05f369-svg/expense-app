@@ -3,27 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>アカウント作成</title>
-    <style>
-        body { font-family: sans-serif; max-width: 400px; margin: 100px auto; padding: 0 20px; }
-        h1 { color: #333; text-align: center; }
-        input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { width: 100%; padding: 10px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
-        button:hover { background: #1976D2; }
-        .link { text-align: center; margin-top: 15px; }
-        .error { color: red; text-align: center; }
-        .success { color: green; text-align: center; }
-    </style>
+    <title>アカウント作成 | Keihi</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <h1>アカウント作成</h1>
-    <input type="text" id="username" placeholder="ユーザー名">
-    <input type="email" id="email" placeholder="メールアドレス">
-    <input type="password" id="password" placeholder="パスワード">
-    <button onclick="register()">登録</button>
-    <div id="message"></div>
-    <div class="link"><a href="/login">ログインはこちら</a></div>
-
+<body class="bg-zinc-950 min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-sm px-6">
+        <div class="mb-10">
+            <h1 class="text-2xl font-bold text-white tracking-tight">Keihi</h1>
+            <p class="text-zinc-500 text-sm mt-1">アカウントを作成して始めましょう</p>
+        </div>
+        <div class="bg-zinc-900 rounded-2xl p-7 border border-zinc-800">
+            <h2 class="text-white font-semibold mb-5">アカウント作成</h2>
+            <input type="text" id="username" placeholder="ユーザー名" class="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-4 py-2.5 mb-3 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-500 placeholder-zinc-500">
+            <input type="email" id="email" placeholder="メールアドレス" class="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-4 py-2.5 mb-3 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-500 placeholder-zinc-500">
+            <input type="password" id="password" placeholder="パスワード" class="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-4 py-2.5 mb-4 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-500 placeholder-zinc-500">
+            <button onclick="register()" class="w-full bg-white hover:bg-zinc-100 text-zinc-900 py-2.5 rounded-lg font-medium transition text-sm">登録する</button>
+            <div id="message" class="text-xs text-center mt-3"></div>
+            <div class="border-t border-zinc-800 mt-5 pt-5 text-center text-xs text-zinc-500">
+                <a href="/login" class="hover:text-white transition">すでにアカウントをお持ちの方</a>
+            </div>
+        </div>
+    </div>
     <script>
         async function register() {
             const username = document.getElementById("username").value;
@@ -37,11 +37,11 @@
             const data = await res.json();
             const msg = document.getElementById("message");
             if (res.ok) {
-                msg.className = "success";
-                msg.textContent = "登録完了！ログインしてください。";
+                msg.className = "text-green-400 text-xs text-center mt-3";
+                msg.textContent = "登録完了しました";
                 setTimeout(() => window.location.href = "/login", 1500);
             } else {
-                msg.className = "error";
+                msg.className = "text-red-400 text-xs text-center mt-3";
                 msg.textContent = data.error;
             }
         }
