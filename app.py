@@ -19,30 +19,57 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
+DATABASE_URL = os.getenv("DATABASE_URL")
+
 def get_db():
-    db = sqlite3.connect("expenses.db")
-    db.row_factory = sqlite3.Row
-    return db
+    if DATABASE_URL:
+        import psycopg2
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn
+    else:
+        db = sqlite3.connect("expenses.db")
+        db.row_factory = sqlite3.Row
+        return db
 
 def init_db():
     db = get_db()
-    db.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
-        )
-    """)
-    db.execute("""
-        CREATE TABLE IF NOT EXISTS expenses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            date TEXT NOT NULL,
-            item TEXT NOT NULL,
-            category TEXT,
-            amount INTEGER NOT NULL
-        )
-    """)
+    cursor = db.cursor()
+    if DATABASE_URL:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS expenses (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                date TEXT NOT NULL,
+                item TEXT NOT NULL,
+                category TEXT,
+                amount INTEGER NOT NULL
+            )
+        """)
+    else:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS expenses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                date TEXT NOT NULL,
+                item TEXT NOT NULL,
+                category TEXT,
+                amount INTEGER NOT NULL
+            )
+        """)
     db.commit()
     db.close()
 
@@ -56,10 +83,12 @@ class User(UserMixin):
 @login_manager.user_loader
 def load_user(user_id):
     db = get_db()
-    user = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    cursor = db.cursor()
+    cursor.execute("SELECT * FROM users WHERE id = %s" if DATABASE_URL else "SELECT * FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
     db.close()
     if user:
-        return User(user["id"], user["username"])
+        return User(user[0], user[1])
     return None
 
 @app.route("/")
@@ -74,12 +103,16 @@ def register():
         username = data["username"]
         password = generate_password_hash(data["password"])
         db = get_db()
+        cursor = db.cursor()
         try:
-            db.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
+            cursor.execute(
+                "INSERT INTO users (username, password) VALUES (%s, %s)" if DATABASE_URL else "INSERT INTO users (username, password) VALUES (?, ?)",
+                (username, password)
+            )
             db.commit()
             db.close()
             return jsonify({"message": "登録完了"})
-        except sqlite3.IntegrityError:
+        except Exception:
             db.close()
             return jsonify({"error": "このユーザー名は既に使われています"}), 400
     return render_template("register.html")
@@ -91,10 +124,15 @@ def login():
         username = data["username"]
         password = data["password"]
         db = get_db()
-        user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        cursor = db.cursor()
+        cursor.execute(
+            "SELECT * FROM users WHERE username = %s" if DATABASE_URL else "SELECT * FROM users WHERE username = ?",
+            (username,)
+        )
+        user = cursor.fetchone()
         db.close()
-        if user and check_password_hash(user["password"], password):
-            login_user(User(user["id"], user["username"]))
+        if user and check_password_hash(user[2], password):
+            login_user(User(user[0], user[1]))
             return jsonify({"message": "ログイン成功"})
         return jsonify({"error": "ユーザー名またはパスワードが間違っています"}), 401
     return render_template("login.html")
@@ -109,9 +147,15 @@ def logout():
 @login_required
 def get_expenses():
     db = get_db()
-    expenses = db.execute("SELECT * FROM expenses WHERE user_id = ? ORDER BY date DESC", (current_user.id,)).fetchall()
+    cursor = db.cursor()
+    cursor.execute(
+        "SELECT * FROM expenses WHERE user_id = %s ORDER BY date DESC" if DATABASE_URL else "SELECT * FROM expenses WHERE user_id = ? ORDER BY date DESC",
+        (current_user.id,)
+    )
+    rows = cursor.fetchall()
     db.close()
-    return jsonify([dict(e) for e in expenses])
+    expenses = [{"id": r[0], "user_id": r[1], "date": r[2], "item": r[3], "category": r[4], "amount": r[5]} for r in rows]
+    return jsonify(expenses)
 
 @app.route("/expenses", methods=["POST"])
 @login_required
@@ -121,11 +165,58 @@ def add_expense():
     amount = data["amount"]
     today = str(date.today())
     db = get_db()
-    db.execute("INSERT INTO expenses (user_id, date, item, category, amount) VALUES (?, ?, ?, ?, ?)",
-               (current_user.id, today, item, "未分類", amount))
+    cursor = db.cursor()
+    cursor.execute(
+        "INSERT INTO expenses (user_id, date, item, category, amount) VALUES (%s, %s, %s, %s, %s)" if DATABASE_URL else "INSERT INTO expenses (user_id, date, item, category, amount) VALUES (?, ?, ?, ?, ?)",
+        (current_user.id, today, item, "未分類", amount)
+    )
     db.commit()
     db.close()
     return jsonify({"message": "追加しました"})
+
+@app.route("/expenses/<int:expense_id>", methods=["DELETE"])
+@login_required
+def delete_expense(expense_id):
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        "DELETE FROM expenses WHERE id = %s AND user_id = %s" if DATABASE_URL else "DELETE FROM expenses WHERE id = ? AND user_id = ?",
+        (expense_id, current_user.id)
+    )
+    db.commit()
+    db.close()
+    return jsonify({"message": "削除しました"})
+
+@app.route("/report")
+@login_required
+def report():
+    db = get_db()
+    cursor = db.cursor()
+    if DATABASE_URL:
+        cursor.execute("""
+            SELECT 
+                TO_CHAR(date::date, 'YYYY-MM') as month,
+                category,
+                SUM(amount) as total
+            FROM expenses 
+            WHERE user_id = %s
+            GROUP BY month, category
+            ORDER BY month DESC
+        """, (current_user.id,))
+    else:
+        cursor.execute("""
+            SELECT 
+                strftime('%Y-%m', date) as month,
+                category,
+                SUM(amount) as total
+            FROM expenses 
+            WHERE user_id = ?
+            GROUP BY month, category
+            ORDER BY month DESC
+        """, (current_user.id,))
+    rows = cursor.fetchall()
+    db.close()
+    return jsonify([{"month": r[0], "category": r[1], "total": r[2]} for r in rows])
 
 @app.route("/receipt", methods=["POST"])
 @login_required
@@ -160,38 +251,15 @@ def read_receipt():
     result = json.loads(content)
     
     db = get_db()
-    db.execute("INSERT INTO expenses (user_id, date, item, category, amount) VALUES (?, ?, ?, ?, ?)",
-               (current_user.id, result.get("日付", str(date.today())), result.get("店名", "不明"), result.get("勘定科目", "未分類"), result.get("合計金額", 0)))
+    cursor = db.cursor()
+    cursor.execute(
+        "INSERT INTO expenses (user_id, date, item, category, amount) VALUES (%s, %s, %s, %s, %s)" if DATABASE_URL else "INSERT INTO expenses (user_id, date, item, category, amount) VALUES (?, ?, ?, ?, ?)",
+        (current_user.id, result.get("日付", str(date.today())), result.get("店名", "不明"), result.get("勘定科目", "未分類"), result.get("合計金額", 0))
+    )
     db.commit()
     db.close()
     
     return jsonify(result)
-
-@app.route("/expenses/<int:expense_id>", methods=["DELETE"])
-@login_required
-def delete_expense(expense_id):
-    db = get_db()
-    db.execute("DELETE FROM expenses WHERE id = ? AND user_id = ?", (expense_id, current_user.id))
-    db.commit()
-    db.close()
-    return jsonify({"message": "削除しました"})
-
-@app.route("/report")
-@login_required
-def report():
-    db = get_db()
-    expenses = db.execute("""
-        SELECT 
-            strftime('%Y-%m', date) as month,
-            category,
-            SUM(amount) as total
-        FROM expenses 
-        WHERE user_id = ?
-        GROUP BY month, category
-        ORDER BY month DESC
-    """, (current_user.id,)).fetchall()
-    db.close()
-    return jsonify([dict(e) for e in expenses])
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
