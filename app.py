@@ -128,7 +128,14 @@ def register():
         data = request.get_json()
         username = data["username"]
         email = data.get("email", "")
-        password = generate_password_hash(data["password"])
+        password = data["password"]
+        
+        if len(password) < 8:
+            return jsonify({"error": "パスワードは8文字以上で設定してください"}), 400
+        if len(username) < 3:
+            return jsonify({"error": "ユーザー名は3文字以上で設定してください"}), 400
+        
+        password = generate_password_hash(password)
         db = get_db()
         cursor = db.cursor()
         try:
