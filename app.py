@@ -247,4 +247,26 @@ def read_receipt():
     )
     
     content = response.choices[0].message.content
-    content = content.
+    content = content.replace("```json", "").replace("```", "").strip()
+    result = json.loads(content)
+
+    receipt_date = result.get("日付", str(date.today()))
+    if "年" in receipt_date:
+        receipt_date = receipt_date.replace("年", "-").replace("月", "-").replace("日", "")
+        parts = receipt_date.split("-")
+        receipt_date = f"{parts[0]}-{parts[1].zfill(2)}-{parts[2].zfill(2)}"
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        "INSERT INTO expenses (user_id, date, item, category, amount) VALUES (%s, %s, %s, %s, %s)" if DATABASE_URL else "INSERT INTO expenses (user_id, date, item, category, amount) VALUES (?, ?, ?, ?, ?)",
+        (current_user.id, receipt_date, result.get("店名", "不明"), result.get("勘定科目", "未分類"), result.get("合計金額", 0))
+    )
+    db.commit()
+    db.close()
+    
+    return jsonify(result)
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
