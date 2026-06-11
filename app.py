@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session
+from flask import Flask, request, jsonify, render_template, redirect, url_for
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 import json
 import os
@@ -195,7 +195,7 @@ def report():
     if DATABASE_URL:
         cursor.execute("""
             SELECT 
-                TO_CHAR(date::date, 'YYYY-MM') as month,
+                LEFT(date, 7) as month,
                 category,
                 SUM(amount) as total
             FROM expenses 
@@ -238,7 +238,7 @@ def read_receipt():
                     },
                     {
                         "type": "text",
-                        "text": "このレシートから以下を日本語で抽出してください。JSON形式のみ返してください。前後に余計なテキストは不要です。勘定科目は日本の確定申告で使われる科目（交通費、接待交際費、通信費、消耗品費、外注費、地代家賃、水道光熱費、広告宣伝費、その他）から最適なものを選んでください。{\"店名\": \"\", \"日付\": \"\", \"合計金額\": 0, \"勘定科目\": \"\", \"品目\": [{\"名前\": \"\", \"金額\": 0}]}"
+                        "text": "このレシートから以下を日本語で抽出してください。JSON形式のみ返してください。前後に余計なテキストは不要です。日付はYYYY-MM-DD形式で返してください。勘定科目は日本の確定申告で使われる科目（交通費、接待交際費、通信費、消耗品費、外注費、地代家賃、水道光熱費、広告宣伝費、その他）から最適なものを選んでください。{\"店名\": \"\", \"日付\": \"\", \"合計金額\": 0, \"勘定科目\": \"\", \"品目\": [{\"名前\": \"\", \"金額\": 0}]}"
                     }
                 ]
             }
@@ -247,20 +247,4 @@ def read_receipt():
     )
     
     content = response.choices[0].message.content
-    content = content.replace("```json", "").replace("```", "").strip()
-    result = json.loads(content)
-    
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute(
-        "INSERT INTO expenses (user_id, date, item, category, amount) VALUES (%s, %s, %s, %s, %s)" if DATABASE_URL else "INSERT INTO expenses (user_id, date, item, category, amount) VALUES (?, ?, ?, ?, ?)",
-        (current_user.id, result.get("日付", str(date.today())), result.get("店名", "不明"), result.get("勘定科目", "未分類"), result.get("合計金額", 0))
-    )
-    db.commit()
-    db.close()
-    
-    return jsonify(result)
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    content = content.
