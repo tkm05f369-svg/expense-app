@@ -1,5 +1,7 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_mail import Mail, Message
+from itsdangerous import URLSafeTimedSerializer
 import json
 import os
 import sqlite3
@@ -18,6 +20,16 @@ STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID")
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+
+app.config["MAIL_SERVER"] = "smtp.gmail.com"
+app.config["MAIL_PORT"] = 587
+app.config["MAIL_USE_TLS"] = True
+app.config["MAIL_USERNAME"] = os.getenv("GMAIL_ADDRESS")
+app.config["MAIL_PASSWORD"] = os.getenv("GMAIL_APP_PASSWORD")
+app.config["MAIL_DEFAULT_SENDER"] = os.getenv("GMAIL_ADDRESS")
+
+mail = Mail(app)
+serializer = URLSafeTimedSerializer(app.secret_key)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -45,15 +57,13 @@ def init_db():
                 username TEXT UNIQUE NOT NULL,
                 password TEXT NOT NULL,
                 is_premium BOOLEAN DEFAULT FALSE,
-                stripe_customer_id TEXT
+                stripe_customer_id TEXT,
+                email TEXT
             )
         """)
-        cursor.execute("""
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT FALSE
-        """)
-        cursor.execute("""
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT
-        """)
+        cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT FALSE")
+        cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT")
+        cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS expenses (
                 id SERIAL PRIMARY KEY,
@@ -71,7 +81,8 @@ def init_db():
                 username TEXT UNIQUE NOT NULL,
                 password TEXT NOT NULL,
                 is_premium INTEGER DEFAULT 0,
-                stripe_customer_id TEXT
+                stripe_customer_id TEXT,
+                email TEXT
             )
         """)
         cursor.execute("""
@@ -116,14 +127,15 @@ def register():
     if request.method == "POST":
         data = request.get_json()
         username = data["username"]
+        email = data.get("email", "")
         password = generate_password_hash(data["password"])
         db = get_db()
         cursor = db.cursor()
         try:
-            cursor.execute(
-                "INSERT INTO users (username, password) VALUES (%s, %s)" if DATABASE_URL else "INSERT INTO users (username, password) VALUES (?, ?)",
-                (username, password)
-            )
+            if DATABASE_URL:
+                cursor.execute("INSERT INTO users (username, password, email) VALUES (%s, %s, %s)", (username, password, email))
+            else:
+                cursor.execute("INSERT INTO users (username, password, email) VALUES (?, ?, ?)", (username, password, email))
             db.commit()
             db.close()
             return jsonify({"message": "登録完了"})
@@ -157,6 +169,48 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for("login"))
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if request.method == "POST":
+        data = request.get_json()
+        email = data["email"]
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            "SELECT * FROM users WHERE email = %s" if DATABASE_URL else "SELECT * FROM users WHERE email = ?",
+            (email,)
+        )
+        user = cursor.fetchone()
+        db.close()
+        if user:
+            token = serializer.dumps(email, salt="password-reset")
+            reset_url = request.host_url + f"reset-password/{token}"
+            msg = Message("パスワードリセット", recipients=[email])
+            msg.body = f"以下のURLからパスワードをリセットしてください。\n\n{reset_url}\n\n有効期限は1時間です。"
+            mail.send(msg)
+        return jsonify({"message": "メールを送信しました（登録済みの場合）"})
+    return render_template("forgot_password.html")
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    try:
+        email = serializer.loads(token, salt="password-reset", max_age=3600)
+    except Exception:
+        return "リンクが無効または期限切れです", 400
+    if request.method == "POST":
+        data = request.get_json()
+        new_password = generate_password_hash(data["password"])
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            "UPDATE users SET password = %s WHERE email = %s" if DATABASE_URL else "UPDATE users SET password = ? WHERE email = ?",
+            (new_password, email)
+        )
+        db.commit()
+        db.close()
+        return jsonify({"message": "パスワードを変更しました"})
+    return render_template("reset_password.html", token=token)
 
 @app.route("/expenses", methods=["GET"])
 @login_required
@@ -209,25 +263,15 @@ def report():
     cursor = db.cursor()
     if DATABASE_URL:
         cursor.execute("""
-            SELECT 
-                LEFT(date, 7) as month,
-                category,
-                SUM(amount) as total
-            FROM expenses 
-            WHERE user_id = %s
-            GROUP BY month, category
-            ORDER BY month DESC
+            SELECT LEFT(date, 7) as month, category, SUM(amount) as total
+            FROM expenses WHERE user_id = %s
+            GROUP BY month, category ORDER BY month DESC
         """, (current_user.id,))
     else:
         cursor.execute("""
-            SELECT 
-                strftime('%Y-%m', date) as month,
-                category,
-                SUM(amount) as total
-            FROM expenses 
-            WHERE user_id = ?
-            GROUP BY month, category
-            ORDER BY month DESC
+            SELECT strftime('%Y-%m', date) as month, category, SUM(amount) as total
+            FROM expenses WHERE user_id = ?
+            GROUP BY month, category ORDER BY month DESC
         """, (current_user.id,))
     rows = cursor.fetchall()
     db.close()
@@ -268,39 +312,25 @@ def payment_success():
 def read_receipt():
     file = request.files["receipt"]
     image_data = base64.b64encode(file.read()).decode("utf-8")
-    
     response = client.chat.completions.create(
         model="gpt-4o",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{image_data}"
-                        }
-                    },
-                    {
-                        "type": "text",
-                        "text": "このレシートから以下を日本語で抽出してください。JSON形式のみ返してください。前後に余計なテキストは不要です。日付はYYYY-MM-DD形式で返してください。勘定科目は日本の確定申告で使われる科目（交通費、接待交際費、通信費、消耗品費、外注費、地代家賃、水道光熱費、広告宣伝費、その他）から最適なものを選んでください。{\"店名\": \"\", \"日付\": \"\", \"合計金額\": 0, \"勘定科目\": \"\", \"品目\": [{\"名前\": \"\", \"金額\": 0}]}"
-                    }
-                ]
-            }
-        ],
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}},
+                {"type": "text", "text": "このレシートから以下を日本語で抽出してください。JSON形式のみ返してください。前後に余計なテキストは不要です。日付はYYYY-MM-DD形式で返してください。勘定科目は日本の確定申告で使われる科目（交通費、接待交際費、通信費、消耗品費、外注費、地代家賃、水道光熱費、広告宣伝費、その他）から最適なものを選んでください。{\"店名\": \"\", \"日付\": \"\", \"合計金額\": 0, \"勘定科目\": \"\", \"品目\": [{\"名前\": \"\", \"金額\": 0}]}"}
+            ]
+        }],
         max_tokens=1000
     )
-    
     content = response.choices[0].message.content
     content = content.replace("```json", "").replace("```", "").strip()
     result = json.loads(content)
-
     receipt_date = result.get("日付", str(date.today()))
     if "年" in receipt_date:
         receipt_date = receipt_date.replace("年", "-").replace("月", "-").replace("日", "")
         parts = receipt_date.split("-")
         receipt_date = f"{parts[0]}-{parts[1].zfill(2)}-{parts[2].zfill(2)}"
-
     db = get_db()
     cursor = db.cursor()
     cursor.execute(
@@ -309,7 +339,6 @@ def read_receipt():
     )
     db.commit()
     db.close()
-    
     return jsonify(result)
 
 if __name__ == "__main__":

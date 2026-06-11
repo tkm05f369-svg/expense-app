@@ -18,6 +18,7 @@
 <body>
     <h1>アカウント作成</h1>
     <input type="text" id="username" placeholder="ユーザー名">
+    <input type="email" id="email" placeholder="メールアドレス">
     <input type="password" id="password" placeholder="パスワード">
     <button onclick="register()">登録</button>
     <div id="message"></div>
@@ -26,11 +27,12 @@
     <script>
         async function register() {
             const username = document.getElementById("username").value;
+            const email = document.getElementById("email").value;
             const password = document.getElementById("password").value;
             const res = await fetch("/register", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({username, password})
+                body: JSON.stringify({username, email, password})
             });
             const data = await res.json();
             const msg = document.getElementById("message");
