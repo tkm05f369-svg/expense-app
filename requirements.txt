@@ -1,5 +1,5 @@
 flask
-openai==1.30.0
+openai==1.14.0
 python-dotenv
 flask-login
 psycopg2-binary
