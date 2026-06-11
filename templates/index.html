@@ -8,17 +8,17 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 </head>
 <body class="bg-zinc-950 min-h-screen text-white">
-    <div class="max-w-4xl mx-auto px-6 py-8">
+    <div class="max-w-4xl mx-auto px-4 py-6">
 
         <!-- ヘッダー -->
-        <div class="flex justify-between items-center mb-8 border-b border-zinc-800 pb-6">
+        <div class="flex justify-between items-center mb-6 border-b border-zinc-800 pb-5">
             <div class="flex items-center gap-3">
                 <h1 class="text-xl font-bold tracking-tight">Keihi</h1>
                 {% if is_premium %}
                 <span class="bg-zinc-800 text-zinc-300 text-xs px-2 py-0.5 rounded-full border border-zinc-700">Pro</span>
                 {% endif %}
             </div>
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-3">
                 <span class="text-zinc-500 text-sm">{{ username }}</span>
                 <a href="/logout" class="text-zinc-500 hover:text-white text-sm transition">ログアウト</a>
             </div>
@@ -26,13 +26,13 @@
 
         <!-- プロプランの案内 -->
         {% if not is_premium %}
-        <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-6">
-            <div class="flex justify-between items-center">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4 mb-5">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
                     <p class="text-white font-medium text-sm">プロプランにアップグレード</p>
-                    <p class="text-zinc-500 text-xs mt-0.5">レシート自動読み取り・勘定科目自動判定が使えます</p>
+                    <p class="text-zinc-500 text-xs mt-0.5">レシート自動読み取り・勘定科目自動判定</p>
                 </div>
-                <button onclick="upgrade()" class="bg-white hover:bg-zinc-100 text-zinc-900 px-4 py-2 rounded-lg text-xs font-medium transition whitespace-nowrap ml-4">
+                <button onclick="upgrade()" class="bg-white hover:bg-zinc-100 text-zinc-900 px-4 py-2 rounded-lg text-xs font-medium transition whitespace-nowrap">
                     月額980円で始める
                 </button>
             </div>
@@ -41,7 +41,7 @@
 
         <!-- レシート読み取り -->
         {% if is_premium %}
-        <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-4">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4 mb-4">
             <p class="text-sm font-medium text-zinc-300 mb-3">レシートから自動登録</p>
             <div class="flex flex-wrap gap-2 items-center">
                 <input type="file" id="receiptFile" accept="image/*" class="text-xs text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-zinc-800 file:text-zinc-300 file:text-xs hover:file:bg-zinc-700 file:transition">
@@ -54,18 +54,18 @@
         {% endif %}
 
         <!-- 手動登録 -->
-        <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-4">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4 mb-4">
             <p class="text-sm font-medium text-zinc-300 mb-3">手動で登録</p>
             <div class="flex flex-wrap gap-2">
-                <input type="text" id="item" placeholder="経費の名前" class="bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-1.5 text-sm flex-1 min-w-32 focus:outline-none focus:ring-1 focus:ring-zinc-500 placeholder-zinc-600">
-                <input type="number" id="amount" placeholder="金額" class="bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-1.5 text-sm w-28 focus:outline-none focus:ring-1 focus:ring-zinc-500 placeholder-zinc-600">
-                <button onclick="addExpense()" class="bg-white hover:bg-zinc-100 text-zinc-900 px-4 py-1.5 rounded-lg text-xs font-medium transition">追加</button>
-                <button onclick="toggleReport()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-1.5 rounded-lg text-xs transition border border-zinc-700">レポート</button>
+                <input type="text" id="item" placeholder="経費の名前" class="bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-2 text-sm flex-1 min-w-32 focus:outline-none focus:ring-1 focus:ring-zinc-500 placeholder-zinc-600">
+                <input type="number" id="amount" placeholder="金額" class="bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-2 text-sm w-28 focus:outline-none focus:ring-1 focus:ring-zinc-500 placeholder-zinc-600">
+                <button onclick="addExpense()" class="bg-white hover:bg-zinc-100 text-zinc-900 px-4 py-2 rounded-lg text-xs font-medium transition">追加</button>
+                <button onclick="toggleReport()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 rounded-lg text-xs transition border border-zinc-700">レポート</button>
             </div>
         </div>
 
         <!-- 月次レポート -->
-        <div id="reportSection" class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-4" style="display:none">
+        <div id="reportSection" class="bg-zinc-900 border border-zinc-800 rounded-xl p-4 mb-4" style="display:none">
             <p class="text-sm font-medium text-zinc-300 mb-4">月次レポート</p>
             <canvas id="reportChart"></canvas>
         </div>
@@ -75,21 +75,8 @@
             <span id="total" class="text-zinc-400 text-sm font-medium"></span>
         </div>
 
-        <!-- 経費一覧 -->
-        <div class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-            <table class="w-full text-sm">
-                <thead>
-                    <tr class="border-b border-zinc-800">
-                        <th class="px-4 py-3 text-left text-zinc-500 text-xs font-medium">日付</th>
-                        <th class="px-4 py-3 text-left text-zinc-500 text-xs font-medium">項目</th>
-                        <th class="px-4 py-3 text-left text-zinc-500 text-xs font-medium">勘定科目</th>
-                        <th class="px-4 py-3 text-right text-zinc-500 text-xs font-medium">金額</th>
-                        <th class="px-4 py-3 text-center text-zinc-500 text-xs font-medium">操作</th>
-                    </tr>
-                </thead>
-                <tbody id="expenseList"></tbody>
-            </table>
-        </div>
+        <!-- 経費一覧（カード型） -->
+        <div id="expenseList" class="flex flex-col gap-2"></div>
 
     </div>
 
@@ -110,29 +97,34 @@
             list.innerHTML = "";
             let total = 0;
             data.forEach(e => {
-                list.innerHTML += `<tr class="border-b border-zinc-800 hover:bg-zinc-800/50 transition" id="row-${e.id}">
-                    <td class="px-4 py-3 text-zinc-400 text-xs">
-                        <span class="view-${e.id}">${e.date}</span>
-                        <input class="edit-${e.id} bg-zinc-800 border border-zinc-700 text-white rounded px-2 py-1 text-xs" type="date" value="${e.date}" style="display:none">
-                    </td>
-                    <td class="px-4 py-3 text-zinc-200">
-                        <span class="view-${e.id}">${e.item}</span>
-                        <input class="edit-${e.id} bg-zinc-800 border border-zinc-700 text-white rounded px-2 py-1 text-xs w-full" type="text" value="${e.item}" style="display:none">
-                    </td>
-                    <td class="px-4 py-3">
-                        <span class="view-${e.id} bg-zinc-800 text-zinc-400 text-xs px-2 py-0.5 rounded border border-zinc-700">${e.category || "未分類"}</span>
-                        <select class="edit-${e.id} bg-zinc-800 border border-zinc-700 text-white rounded px-2 py-1 text-xs" style="display:none">${categoryList.map(c => `<option value="${c}" ${c === e.category ? "selected" : ""}>${c}</option>`).join("")}</select>
-                    </td>
-                    <td class="px-4 py-3 text-right text-zinc-200 font-medium">
-                        <span class="view-${e.id}">${e.amount.toLocaleString()}円</span>
-                        <input class="edit-${e.id} bg-zinc-800 border border-zinc-700 text-white rounded px-2 py-1 text-xs w-24" type="number" value="${e.amount}" style="display:none">
-                    </td>
-                    <td class="px-4 py-3 text-center">
-                        <button class="text-xs text-zinc-500 hover:text-white transition mr-1" id="edit-btn-${e.id}" onclick="startEdit(${e.id})">編集</button>
-                        <button class="text-xs text-green-500 hover:text-green-400 transition mr-1" id="save-btn-${e.id}" onclick="saveEdit(${e.id})" style="display:none">保存</button>
-                        <button class="text-xs text-red-500 hover:text-red-400 transition" onclick="deleteExpense(${e.id})">削除</button>
-                    </td>
-                </tr>`;
+                list.innerHTML += `
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" id="row-${e.id}">
+                    <div class="flex justify-between items-start gap-2">
+                        <div class="flex-1 min-w-0">
+                            <div class="view-${e.id}">
+                                <p class="text-white font-medium text-sm truncate">${e.item}</p>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="text-zinc-500 text-xs">${e.date}</span>
+                                    <span class="bg-zinc-800 text-zinc-400 text-xs px-2 py-0.5 rounded border border-zinc-700">${e.category || "未分類"}</span>
+                                </div>
+                            </div>
+                            <div class="edit-${e.id} flex flex-col gap-2 mt-1" style="display:none">
+                                <input type="text" value="${e.item}" class="bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-500">
+                                <input type="date" value="${e.date}" class="bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-500">
+                                <select class="bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-500">${categoryList.map(c => `<option value="${c}" ${c === e.category ? "selected" : ""}>${c}</option>`).join("")}</select>
+                                <input type="number" value="${e.amount}" class="bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-500">
+                            </div>
+                        </div>
+                        <div class="flex flex-col items-end gap-2 shrink-0">
+                            <span class="view-${e.id} text-white font-semibold">${e.amount.toLocaleString()}円</span>
+                            <div class="flex gap-2">
+                                <button id="edit-btn-${e.id}" onclick="startEdit(${e.id})" class="text-xs text-zinc-500 hover:text-white transition">編集</button>
+                                <button id="save-btn-${e.id}" onclick="saveEdit(${e.id})" class="text-xs text-green-500 hover:text-green-400 transition" style="display:none">保存</button>
+                                <button onclick="deleteExpense(${e.id})" class="text-xs text-red-500 hover:text-red-400 transition">削除</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
                 total += e.amount;
             });
             document.getElementById("total").textContent = "合計 " + total.toLocaleString() + "円";
@@ -140,16 +132,16 @@
 
         function startEdit(id) {
             document.querySelectorAll(`.view-${id}`).forEach(el => el.style.display = "none");
-            document.querySelectorAll(`.edit-${id}`).forEach(el => el.style.display = "inline-block");
+            document.querySelectorAll(`.edit-${id}`).forEach(el => el.style.display = "flex");
             document.getElementById(`edit-btn-${id}`).style.display = "none";
-            document.getElementById(`save-btn-${id}`).style.display = "inline-block";
+            document.getElementById(`save-btn-${id}`).style.display = "inline";
         }
 
         async function saveEdit(id) {
             const row = document.getElementById(`row-${id}`);
-            const inputs = row.querySelectorAll(`input.edit-${id}, select.edit-${id}`);
-            const date = inputs[0].value;
-            const item = inputs[1].value;
+            const inputs = row.querySelectorAll(`div.edit-${id} input, div.edit-${id} select`);
+            const item = inputs[0].value;
+            const date = inputs[1].value;
             const category = inputs[2].value;
             const amount = parseInt(inputs[3].value);
             await fetch(`/expenses/${id}`, {
