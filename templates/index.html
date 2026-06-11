@@ -8,7 +8,7 @@
     <style>
         body { font-family: sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; }
         h1, h2 { color: #333; }
-        input { padding: 8px; margin: 5px; border: 1px solid #ccc; border-radius: 4px; }
+        input, select { padding: 8px; margin: 5px; border: 1px solid #ccc; border-radius: 4px; }
         button { padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
         button:hover { background: #45a049; }
         .receipt-btn { background: #2196F3; }
@@ -17,12 +17,16 @@
         .report-btn:hover { background: #F57C00; }
         .delete-btn { background: #f44336; padding: 4px 10px; font-size: 12px; }
         .delete-btn:hover { background: #d32f2f; }
+        .edit-btn { background: #607D8B; padding: 4px 10px; font-size: 12px; }
+        .edit-btn:hover { background: #455A64; }
+        .save-btn { background: #4CAF50; padding: 4px 10px; font-size: 12px; }
         .premium-btn { background: #9C27B0; }
         .premium-btn:hover { background: #7B1FA2; }
         .premium-badge { background: #9C27B0; color: white; padding: 3px 8px; border-radius: 10px; font-size: 12px; margin-left: 10px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
         th { background: #f2f2f2; }
+        td input, td select { padding: 4px; margin: 0; width: 100%; box-sizing: border-box; }
         #total { font-weight: bold; margin-top: 10px; font-size: 18px; }
         #loading { display: none; color: #666; margin: 10px 0; }
         .section { margin-bottom: 20px; padding: 15px; border: 1px solid #eee; border-radius: 8px; }
@@ -84,6 +88,7 @@
     </table>
 
     <script>
+        const categories = ["交通費","接待交際費","通信費","消耗品費","外注費","地代家賃","水道光熱費","広告宣伝費","租税公課","未分類","その他"];
         let chartInstance = null;
 
         async function upgrade() {
@@ -99,16 +104,42 @@
             list.innerHTML = "";
             let total = 0;
             data.forEach(e => {
-                list.innerHTML += `<tr>
-                    <td>${e.date}</td>
-                    <td>${e.item}</td>
-                    <td>${e.category || "未分類"}</td>
-                    <td>${e.amount.toLocaleString()}円</td>
-                    <td><button class="delete-btn" onclick="deleteExpense(${e.id})">削除</button></td>
+                list.innerHTML += `<tr id="row-${e.id}">
+                    <td><span class="view-${e.id}">${e.date}</span><input class="edit-${e.id}" type="date" value="${e.date}" style="display:none"></td>
+                    <td><span class="view-${e.id}">${e.item}</span><input class="edit-${e.id}" type="text" value="${e.item}" style="display:none"></td>
+                    <td><span class="view-${e.id}">${e.category || "未分類"}</span><select class="edit-${e.id}" style="display:none">${categories.map(c => `<option value="${c}" ${c === e.category ? "selected" : ""}>${c}</option>`).join("")}</select></td>
+                    <td><span class="view-${e.id}">${e.amount.toLocaleString()}円</span><input class="edit-${e.id}" type="number" value="${e.amount}" style="display:none"></td>
+                    <td>
+                        <button class="edit-btn" id="edit-btn-${e.id}" onclick="startEdit(${e.id})">編集</button>
+                        <button class="save-btn" id="save-btn-${e.id}" onclick="saveEdit(${e.id})" style="display:none">保存</button>
+                        <button class="delete-btn" onclick="deleteExpense(${e.id})">削除</button>
+                    </td>
                 </tr>`;
                 total += e.amount;
             });
             document.getElementById("total").textContent = "合計: " + total.toLocaleString() + "円";
+        }
+
+        function startEdit(id) {
+            document.querySelectorAll(`.view-${id}`).forEach(el => el.style.display = "none");
+            document.querySelectorAll(`.edit-${id}`).forEach(el => el.style.display = "inline-block");
+            document.getElementById(`edit-btn-${id}`).style.display = "none";
+            document.getElementById(`save-btn-${id}`).style.display = "inline-block";
+        }
+
+        async function saveEdit(id) {
+            const row = document.getElementById(`row-${id}`);
+            const inputs = row.querySelectorAll(`input.edit-${id}, select.edit-${id}`);
+            const date = inputs[0].value;
+            const item = inputs[1].value;
+            const category = inputs[2].value;
+            const amount = parseInt(inputs[3].value);
+            await fetch(`/expenses/${id}`, {
+                method: "PUT",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({date, item, category, amount})
+            });
+            loadExpenses();
         }
 
         async function deleteExpense(id) {
@@ -171,10 +202,7 @@
             if (chartInstance) chartInstance.destroy();
             chartInstance = new Chart(document.getElementById("reportChart"), {
                 type: "doughnut",
-                data: {
-                    labels: labels,
-                    datasets: [{ data: values, backgroundColor: colors }]
-                },
+                data: { labels, datasets: [{ data: values, backgroundColor: colors }] },
                 options: { plugins: { legend: { position: "bottom" } } }
             });
         }

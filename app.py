@@ -256,6 +256,20 @@ def delete_expense(expense_id):
     db.close()
     return jsonify({"message": "削除しました"})
 
+@app.route("/expenses/<int:expense_id>", methods=["PUT"])
+@login_required
+def update_expense(expense_id):
+    data = request.get_json()
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        "UPDATE expenses SET date = %s, item = %s, category = %s, amount = %s WHERE id = %s AND user_id = %s" if DATABASE_URL else "UPDATE expenses SET date = ?, item = ?, category = ?, amount = ? WHERE id = ? AND user_id = ?",
+        (data["date"], data["item"], data["category"], data["amount"], expense_id, current_user.id)
+    )
+    db.commit()
+    db.close()
+    return jsonify({"message": "更新しました"})
+
 @app.route("/report")
 @login_required
 def report():
