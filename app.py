@@ -370,22 +370,6 @@ def terms():
 def privacy():
     return render_template("privacy.html", email=os.getenv("GMAIL_ADDRESS"))
 
-@app.route("/admin/set-premium")
-def set_premium():
-    secret = request.args.get("secret")
-    username = request.args.get("username")
-    if secret != "takumi-premium-2026":
-        return "unauthorized", 403
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute(
-        "UPDATE users SET is_premium = %s WHERE username = %s" if DATABASE_URL else "UPDATE users SET is_premium = 1 WHERE username = ?",
-        (True, username) if DATABASE_URL else (username,)
-    )
-    db.commit()
-    db.close()
-    return f"{username} をプロにしました"
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
