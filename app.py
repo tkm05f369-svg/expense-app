@@ -370,6 +370,19 @@ def terms():
 def privacy():
     return render_template("privacy.html", email=os.getenv("GMAIL_ADDRESS"))
 
+@app.route("/admin/clear-db")
+def clear_db():
+    secret = request.args.get("secret")
+    if secret != "takumi-clear-2026":
+        return "unauthorized", 403
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("DELETE FROM expenses")
+    cursor.execute("DELETE FROM users")
+    db.commit()
+    db.close()
+    return "DB cleared"
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
