@@ -49,6 +49,12 @@ def init_db():
             )
         """)
         cursor.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT FALSE
+        """)
+        cursor.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT
+        """)
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS expenses (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL,
