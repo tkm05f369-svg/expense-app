@@ -4,3 +4,4 @@ python-dotenv
 flask-login
 psycopg2-binary
 sqlalchemy
+stripe

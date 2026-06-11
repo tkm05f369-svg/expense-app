@@ -6,11 +6,15 @@ import sqlite3
 from datetime import date
 import openai
 import base64
+import stripe
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 
 load_dotenv()
 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY", "dummy"))
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_PUBLIC_KEY = os.getenv("STRIPE_PUBLIC_KEY")
+STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID")
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
@@ -39,7 +43,9 @@ def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
                 username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL
+                password TEXT NOT NULL,
+                is_premium BOOLEAN DEFAULT FALSE,
+                stripe_customer_id TEXT
             )
         """)
         cursor.execute("""
@@ -57,7 +63,9 @@ def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL
+                password TEXT NOT NULL,
+                is_premium INTEGER DEFAULT 0,
+                stripe_customer_id TEXT
             )
         """)
         cursor.execute("""
@@ -76,9 +84,10 @@ def init_db():
 init_db()
 
 class User(UserMixin):
-    def __init__(self, id, username):
+    def __init__(self, id, username, is_premium=False):
         self.id = id
         self.username = username
+        self.is_premium = is_premium
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -88,13 +97,13 @@ def load_user(user_id):
     user = cursor.fetchone()
     db.close()
     if user:
-        return User(user[0], user[1])
+        return User(user[0], user[1], bool(user[3]))
     return None
 
 @app.route("/")
 @login_required
 def index():
-    return render_template("index.html", username=current_user.username)
+    return render_template("index.html", username=current_user.username, is_premium=current_user.is_premium, stripe_public_key=STRIPE_PUBLIC_KEY)
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
@@ -132,7 +141,7 @@ def login():
         user = cursor.fetchone()
         db.close()
         if user and check_password_hash(user[2], password):
-            login_user(User(user[0], user[1]))
+            login_user(User(user[0], user[1], bool(user[3])))
             return jsonify({"message": "ログイン成功"})
         return jsonify({"error": "ユーザー名またはパスワードが間違っています"}), 401
     return render_template("login.html")
@@ -217,6 +226,36 @@ def report():
     rows = cursor.fetchall()
     db.close()
     return jsonify([{"month": r[0], "category": r[1], "total": r[2]} for r in rows])
+
+@app.route("/create-checkout-session", methods=["POST"])
+@login_required
+def create_checkout_session():
+    session = stripe.checkout.Session.create(
+        payment_method_types=["card"],
+        line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
+        mode="subscription",
+        success_url=request.host_url + "payment-success?session_id={CHECKOUT_SESSION_ID}",
+        cancel_url=request.host_url,
+        client_reference_id=str(current_user.id)
+    )
+    return jsonify({"url": session.url})
+
+@app.route("/payment-success")
+@login_required
+def payment_success():
+    session_id = request.args.get("session_id")
+    if session_id:
+        checkout_session = stripe.checkout.Session.retrieve(session_id)
+        user_id = checkout_session.client_reference_id
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            "UPDATE users SET is_premium = %s WHERE id = %s" if DATABASE_URL else "UPDATE users SET is_premium = 1 WHERE id = ?",
+            (True, user_id) if DATABASE_URL else (user_id,)
+        )
+        db.commit()
+        db.close()
+    return redirect(url_for("index"))
 
 @app.route("/receipt", methods=["POST"])
 @login_required
